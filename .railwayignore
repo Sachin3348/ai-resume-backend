@@ -1,0 +1,13 @@
+# Railway ignores .railwayignore patterns during build context
+# Keep build context small and safe
+venv/
+__pycache__/
+*.pyc
+*.pyo
+.env
+.env.*
+!.env.example
+.git/
+.gitignore
+*.md
+.DS_Store
