@@ -66,3 +66,45 @@ class ParsedResume(BaseModel):
         default_factory=list,
         description="All project entries found in the resume. Return empty list if no projects section exists.",
     )
+
+
+# ---------------------------------------------------------------------------
+# Optimization Schemas (Magic Writer)
+# ---------------------------------------------------------------------------
+
+
+class OptimizedBullet(BaseModel):
+    """A single bullet with multiple optimized suggestions."""
+
+    original: str = Field(
+        ...,
+        description="The original bullet point text exactly as provided by the user.",
+    )
+    suggestions: list[str] = Field(
+        ...,
+        min_length=4,
+        max_length=4,
+        description="Exactly 4 rewritten variations of the bullet point. Each uses strong action verbs, quantified impact, and concise professional language. Must preserve the factual meaning.",
+    )
+
+
+class OptimizationRequest(BaseModel):
+    """Input for the bullet point optimizer."""
+
+    role: str = Field(..., description="Job role/title for context.")
+    company: str = Field(..., description="Company name for context.")
+    bullets: list[str] = Field(
+        ...,
+        min_length=1,
+        max_length=20,
+        description="List of bullet points to optimize (1-20).",
+    )
+
+
+class OptimizationResponse(BaseModel):
+    """Structured response from the bullet optimizer."""
+
+    results: list[OptimizedBullet] = Field(
+        ...,
+        description="List of optimized bullets in the same order as input.",
+    )

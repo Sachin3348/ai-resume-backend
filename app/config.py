@@ -9,6 +9,12 @@ class Settings(BaseSettings):
     anthropic_api_key: str = ""
     ollama_base_url: str = "http://localhost:11434"
 
+    # Redis
+    redis_url: str = "redis://localhost:6379/0"
+    redis_semantic_url: str = "redis://localhost:6379/1"
+    cache_ttl_days: int = 7
+    semantic_distance_threshold: float = 0.10
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
