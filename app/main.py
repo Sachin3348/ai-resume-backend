@@ -6,7 +6,7 @@ from app.pdf_extractor import extract_text_from_pdf
 from app.parser import parse_resume_text
 from app.optimizer import optimize_bullets
 from app.llm_client import get_instructor_client
-from app.cache import hash_text, cache_get, cache_set
+from app.cache import hash_text, cache_get, cache_set, warm_up_cache
 from app.linkedin.router import router as linkedin_router
 
 app = FastAPI(
@@ -19,8 +19,9 @@ app.include_router(linkedin_router)
 
 @app.on_event("startup")
 async def startup_event():
-    """Eagerly initialize the LLM client to catch missing API keys at boot."""
+    """Eagerly initialize singletons to catch config errors at boot."""
     get_instructor_client()
+    warm_up_cache()  # loads embedding model once, connects Redis, creates index
 
 
 @app.post("/parse-resume", response_model=ParsedResume)

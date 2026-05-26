@@ -9,9 +9,13 @@ class Settings(BaseSettings):
     anthropic_api_key: str = ""
     ollama_base_url: str = "http://localhost:11434"
 
+    # HuggingFace
+    hf_token: str = ""
+
     # Redis
     redis_url: str = "redis://localhost:6379/0"
-    redis_semantic_url: str = "redis://localhost:6379/1"
+    # Semantic cache MUST use DB 0 — RediSearch indexes only work on DB 0
+    redis_semantic_url: str = "redis://localhost:6379/0"
     cache_ttl_days: int = 7
     semantic_distance_threshold: float = 0.10
 
