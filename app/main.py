@@ -8,6 +8,7 @@ from app.optimizer import optimize_bullets
 from app.llm_client import get_instructor_client
 from app.cache import hash_text, cache_get, cache_set, warm_up_cache
 from app.linkedin.router import router as linkedin_router
+from app.targeted_review.router import router as targeted_review_router
 
 app = FastAPI(
     title="AI Resume Parser",
@@ -15,6 +16,7 @@ app = FastAPI(
 )
 
 app.include_router(linkedin_router)
+app.include_router(targeted_review_router)
 
 
 @app.on_event("startup")
