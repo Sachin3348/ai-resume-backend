@@ -55,6 +55,27 @@ class Project(BaseModel):
     )
 
 
+class SectionScore(BaseModel):
+    score: int = Field(ge=0, description="Score awarded for this dimension.")
+    max_score: int = Field(description="Maximum possible score for this dimension.")
+    feedback: str = Field(description="Specific, actionable feedback for this dimension.")
+
+
+class ResumeScore(BaseModel):
+    """Standalone quality score inferred from the resume alone (no JD)."""
+
+    overall_score: int = Field(ge=0, le=100, description="Weighted total out of 100.")
+    detected_role: str = Field(description="Most recent / primary role inferred from the resume.")
+    detected_domain: str = Field(description="Industry or domain inferred from the resume (e.g. 'EdTech / B2B SaaS').")
+    impact_score: SectionScore = Field(description="Quantified achievements and measurable results. Max 30.")
+    brevity_score: SectionScore = Field(description="Conciseness, no filler words, appropriate bullet length. Max 20.")
+    style_score: SectionScore = Field(description="Strong action verbs, consistent tense, clean formatting. Max 20.")
+    skills_score: SectionScore = Field(description="Relevance and depth of skills for the detected role. Max 15.")
+    sections_score: SectionScore = Field(description="Presence of key sections: summary, skills, education, contact. Max 15.")
+    top_issues: list[str] = Field(description="3-5 highest-priority fixes, most impactful first.")
+    strengths: list[str] = Field(description="2-3 standout positives specific to this resume.")
+
+
 class ParsedResume(BaseModel):
     """Structured extraction of Work Experience and Projects sections from a resume."""
 
@@ -66,6 +87,7 @@ class ParsedResume(BaseModel):
         default_factory=list,
         description="All project entries found in the resume. Return empty list if no projects section exists.",
     )
+    score: ResumeScore = Field(description="Standalone quality score inferred from the resume.")
 
 
 # ---------------------------------------------------------------------------

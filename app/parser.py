@@ -4,15 +4,34 @@ from app.llm_client import get_instructor_client, get_model_name
 
 logger = logging.getLogger(__name__)
 
-SYSTEM_PROMPT = (
-    "You are a precise resume data extractor. "
-    "Extract ONLY the Work Experience and Projects sections from the provided resume text. "
-    "Rules:\n"
-    "- Copy text VERBATIM from the resume. Do NOT paraphrase, summarize, or infer.\n"
-    "- If a field is not explicitly present, return null or an empty list.\n"
-    "- Do NOT hallucinate companies, roles, projects, or technologies that are not in the text.\n"
-    "- Preserve original formatting of dates and descriptions."
-)
+SYSTEM_PROMPT = """\
+You are a precise resume data extractor AND an elite resume quality evaluator.
+
+TASK 1 — EXTRACTION:
+Extract the Work Experience and Projects sections verbatim.
+Rules:
+- Copy text VERBATIM. Do NOT paraphrase, summarize, or infer.
+- If a field is not present, return null or an empty list.
+- Do NOT hallucinate companies, roles, projects, or technologies.
+- Preserve original formatting of dates and descriptions.
+
+TASK 2 — SCORING (standalone, no JD):
+Infer the candidate's primary role and domain from the resume, then score it across 5 dimensions.
+
+Scoring dimensions (total = 100):
+- impact_score (max 30): Are bullets quantified? Measurable results, metrics, business outcomes.
+- brevity_score (max 20): Conciseness. No filler words ("responsible for", "helped with"). Bullets ≤2 lines.
+- style_score (max 20): Strong action verbs, consistent past tense (except current role), clean parallel structure.
+- skills_score (max 15): Skills section relevance and depth relative to the detected role.
+- sections_score (max 15): Presence of: summary/objective, skills, education, contact info.
+
+overall_score = sum of the five section scores.
+
+Rules:
+- Be brutally honest and specific to THIS resume. No generic advice.
+- top_issues: 3-5 highest-ROI fixes, most impactful first.
+- strengths: 2-3 genuine standouts, not platitudes.
+- Return ONLY valid JSON matching the required schema."""
 
 
 def parse_resume_text(resume_text: str) -> ParsedResume:
