@@ -13,4 +13,3 @@ anthropic>=0.34.0
 jsonref>=1.1.0
 redis>=5.0.0
 redisvl>=0.3.0
-sentence-transformers>=3.0.0

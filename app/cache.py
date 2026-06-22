@@ -6,13 +6,12 @@ Redis caching layer:
 Architecture:
 - Main Redis client  → any DB (default: 0), exact-match only
 - Semantic Redis     → ALWAYS DB 0 (RediSearch requirement)
-- Embedding model   → singleton, loaded once per process
+- Embeddings        → Gemini text-embedding-004 (no local model / no PyTorch)
 - Both clients use a _FAILED sentinel so init is never retried after failure
 """
 
 import hashlib
 import logging
-import os
 import re
 from typing import Any
 
@@ -66,45 +65,42 @@ def get_redis() -> redis.Redis | None:
 
 
 # ---------------------------------------------------------------------------
-# Singleton: HuggingFace embedding model (sentence-transformers)
-# Loaded once per process — never inside request handlers.
+# Gemini embedding function — replaces sentence-transformers / PyTorch
+# text-embedding-004 returns 768-dim vectors, called only on cache miss.
 # ---------------------------------------------------------------------------
 
-_embedding_model: Any = None  # None | model instance | _FAILED
+_gemini_client: Any = None  # None | google.genai.Client | _FAILED
+_EMBEDDING_MODEL = "gemini-embedding-001"
+
+
+def _get_gemini_client():
+    global _gemini_client
+    if _gemini_client is _FAILED:
+        return None
+    if _gemini_client is not None:
+        return _gemini_client
+    try:
+        from google import genai
+        settings = get_settings()
+        _gemini_client = genai.Client(api_key=settings.google_api_key)
+        return _gemini_client
+    except Exception as exc:
+        logger.warning("Gemini client unavailable (semantic cache disabled): %s", exc)
+        _gemini_client = _FAILED
+        return None
+
+
+def _gemini_embed(text: str) -> list[float]:
+    client = _get_gemini_client()
+    if client is None:
+        raise RuntimeError("Gemini client not available")
+    response = client.models.embed_content(model=_EMBEDDING_MODEL, contents=text)
+    return response.embeddings[0].values
 
 
 def get_embedding_model():
-    """
-    Singleton sentence-transformers model used by the semantic cache.
-    Loads weights exactly once per process lifetime.
-    """
-    global _embedding_model
-    if _embedding_model is _FAILED:
-        return None
-    if _embedding_model is not None:
-        return _embedding_model
-
-    try:
-        from sentence_transformers import SentenceTransformer
-
-        settings = get_settings()
-        if settings.hf_token:
-            # Set for both sentence-transformers and redisvl's internal HF calls
-            os.environ["HUGGINGFACEHUB_API_TOKEN"] = settings.hf_token
-            os.environ["HF_TOKEN"] = settings.hf_token
-            logger.info("HuggingFace token configured.")
-
-        logger.info("Loading embedding model (once per process)…")
-        _embedding_model = SentenceTransformer(
-            "all-MiniLM-L6-v2",
-            token=settings.hf_token or None,
-        )
-        logger.info("Embedding model loaded: all-MiniLM-L6-v2")
-        return _embedding_model
-    except Exception as exc:
-        logger.warning("Embedding model unavailable (semantic cache disabled): %s", exc)
-        _embedding_model = _FAILED
-        return None
+    """Returns the embed callable if Gemini client is available, else None."""
+    return _gemini_embed if _get_gemini_client() is not None else None
 
 
 # ---------------------------------------------------------------------------
@@ -151,32 +147,38 @@ def get_semantic_cache():
 
     try:
         from redisvl.extensions.llmcache import SemanticCache
+        from redisvl.utils.vectorize import CustomTextVectorizer
+
+        vectorizer = CustomTextVectorizer(embed=_gemini_embed)
 
         _semantic_cache = SemanticCache(
             name="bullet_opt_cache",
             redis_url=semantic_url,
             distance_threshold=settings.semantic_distance_threshold,
             ttl=settings.cache_ttl_days * 86400,
+            vectorizer=vectorizer,
         )
         logger.info(
-            "Semantic cache initialized — Redis DB 0, threshold=%.2f, ttl=%dd",
+            "Semantic cache initialized — Gemini %s, Redis DB 0, threshold=%.2f, ttl=%dd",
+            _EMBEDDING_MODEL,
             settings.semantic_distance_threshold,
             settings.cache_ttl_days,
         )
         return _semantic_cache
     except Exception as exc:
-        # "Index already exists" is safe to ignore — happens on restart
         err = str(exc)
         if "already exists" in err.lower():
             logger.info("Semantic cache index already exists — reusing.")
-            # Re-attempt without recreating index
             try:
                 from redisvl.extensions.llmcache import SemanticCache
+                from redisvl.utils.vectorize import CustomTextVectorizer
+                vectorizer = CustomTextVectorizer(embed=_gemini_embed)
                 _semantic_cache = SemanticCache(
                     name="bullet_opt_cache",
                     redis_url=semantic_url,
                     distance_threshold=settings.semantic_distance_threshold,
                     ttl=settings.cache_ttl_days * 86400,
+                    vectorizer=vectorizer,
                 )
                 return _semantic_cache
             except Exception as inner:
@@ -263,6 +265,5 @@ def warm_up_cache() -> None:
     """
     logger.info("Warming up cache singletons…")
     get_redis()
-    get_embedding_model()   # loads weights once here, not on first request
     get_semantic_cache()
     logger.info("Cache warm-up complete.")
